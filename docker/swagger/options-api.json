@@ -1,0 +1,37 @@
+{
+    "info": {
+        "title": "pdr.ua PDR",
+        "version": "0.0.1-beta",
+        "description": "PDR Documentation",
+        "termsOfService": "https://pdr.ua/",
+        "license": {
+            "name": "MIT",
+            "url": "https://en.wikipedia.org/wiki/MIT_License"
+        },
+        "contact": {
+            "name": "PENDEJO Inc.",
+            "url": "https://grabli.group",
+            "email": "team@grabli.group"
+        },
+        "xLogo": {
+            "url": "https://grabli.group/media/logo.png",
+            "backgroundColor": "#FFFFFF",
+            "altText": "PENDEJO logo"
+        }
+    },
+    "defaultTag": "PDR",
+    "servers": [
+        {
+            "url": "https://pdr.loc",
+            "description": "Local environment server"
+        },
+        {
+            "url": "https://pdd.rabotu-rabotayu.pp.ua",
+            "description": "Sandbox environment server"
+        },
+        {
+            "url": "https://pdr.ua",
+            "description": "Production environment server"
+        }
+    ]
+}
