@@ -26,4 +26,11 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 
+/.claude/
+/.junie/
+/.mcp.json
+/AGENTS.md
+/CLAUDE.md
+/boost.json
+
 *:Zone.Identifier
