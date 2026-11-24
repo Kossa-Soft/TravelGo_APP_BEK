@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+main() {
+    local root git_dir previous previous_container revision temp_dump public_url
+    root=$(cd "$(dirname "$(readlink -f -- "${BASH_SOURCE[0]}")")/../.." && pwd)
+    cd "$root"
+
+    export TGO_ENV_FILE="${TGO_ENV_FILE:-/etc/travelgo/server.env}"
+    local project="${TGO_PROJECT:-travelgo}"
+    local backup_dir="${TGO_BACKUP_DIR:-/var/lib/travelgo/backups}"
+    git_dir=$(git rev-parse --absolute-git-dir)
+    exec 9>"$git_dir/tgo-update.lock"
+    flock -n 9 || { printf 'Another TravelGo update is running.\n' >&2; return 1; }
+
+    if [[ ! -r "$TGO_ENV_FILE" ]]; then
+        printf 'Cannot read deployment settings at %s\n' "$TGO_ENV_FILE" >&2
+        return 1
+    fi
+    if [[ "$(git branch --show-current)" != dev-main || -n "$(git status --porcelain)" ]]; then
+        printf 'Deploy from a clean dev-main checkout.\n' >&2
+        return 1
+    fi
+
+    (
+        umask 022
+        git fetch --no-tags origin dev-main
+        git merge --ff-only FETCH_HEAD
+    )
+    revision=$(git rev-parse HEAD)
+    export TGO_RELEASE="$revision"
+
+    local -a compose=(docker compose -p "$project" --env-file "$TGO_ENV_FILE" -f "$root/compose.deploy.yaml")
+    previous_container=$("${compose[@]}" ps -q app)
+    previous=
+    if [[ -n "$previous_container" ]]; then
+        previous=$(docker inspect --format '{{.Config.Image}}' "$previous_container")
+        previous=${previous#travelgo-app:}
+    fi
+
+    "${compose[@]}" build --pull app web
+    "${compose[@]}" up -d --wait --wait-timeout 90 db
+
+    mkdir -p -- "$backup_dir"
+    temp_dump=$(mktemp --tmpdir="$backup_dir" ".before-$revision.XXXXXXXX")
+    if ! "${compose[@]}" exec -T db sh -c 'pg_dump --format=custom --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' > "$temp_dump"; then
+        rm -f -- "$temp_dump"
+        printf 'Database backup failed. Migration was not started.\n' >&2
+        return 1
+    fi
+    mv -- "$temp_dump" "$backup_dir/$(date -u +%Y%m%dT%H%M%SZ)-$revision.dump"
+
+    "${compose[@]}" run --rm --no-deps app php artisan migrate --force --no-interaction
+    if ! "${compose[@]}" up -d --no-build --wait --wait-timeout 120; then
+        if [[ "$previous" =~ ^[0-9a-f]{40}$ && "$previous" != "$revision" ]]; then
+            printf 'New release failed. Trying the previous images with the current schema.\n' >&2
+            TGO_RELEASE="$previous" "${compose[@]}" up -d --no-build --wait --wait-timeout 90 || true
+        fi
+        return 1
+    fi
+
+    public_url=$("${compose[@]}" exec -T app printenv APP_URL)
+    curl --fail --silent --show-error --retry 8 --retry-all-errors --retry-delay 3 --connect-timeout 4 --max-time 60 \
+        --output /dev/null "${public_url%/}/up"
+    printf 'TravelGo %s is healthy at %s\n' "$revision" "$public_url"
+}
+
+main "$@"

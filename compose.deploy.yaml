@@ -1,0 +1,87 @@
+name: travelgo
+
+x-app: &app
+  image: travelgo-app:${TGO_RELEASE:?Set TGO_RELEASE to the deployment revision}
+  restart: unless-stopped
+  env_file:
+    - ${TGO_ENV_FILE:?Set TGO_ENV_FILE to the server environment file}
+  environment:
+    DB_CONNECTION: pgsql
+    DB_HOST: db
+    DB_PORT: 5432
+    QUEUE_CONNECTION: database
+    CACHE_STORE: database
+    SESSION_DRIVER: database
+    TGO_POSTGRES_PASSWORD: ""
+  depends_on:
+    db:
+      condition: service_healthy
+  volumes:
+    - app-storage:/var/www/html/storage/app
+
+services:
+  app:
+    <<: *app
+    build:
+      context: .
+      dockerfile: docker/deploy/Dockerfile
+      target: app
+
+  worker:
+    <<: *app
+    command: ["php", "artisan", "queue:work", "database", "--queue=mobile-sms,default", "--sleep=2", "--timeout=30", "--no-interaction"]
+    stop_grace_period: 40s
+
+  scheduler:
+    <<: *app
+    command: ["php", "artisan", "schedule:work", "--no-interaction"]
+
+  web:
+    image: travelgo-web:${TGO_RELEASE}
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: docker/deploy/Dockerfile
+      target: web
+    environment:
+      TGO_DOMAIN: ${TGO_DOMAIN:?Set the deployment domain}
+    depends_on:
+      app:
+        condition: service_started
+    ports:
+      - "${TGO_HTTP_BIND:-80}:80"
+      - "${TGO_HTTPS_BIND:-443}:443"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "3", "-O", "/dev/null", "http://127.0.0.1:8080/up"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+      start_period: 10s
+
+  db:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:?Set DB_DATABASE}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${TGO_POSTGRES_PASSWORD:?Set the PostgreSQL bootstrap password}
+      TRAVELGO_DB_USER: ${DB_USERNAME:?Set DB_USERNAME}
+      TRAVELGO_DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/deploy/init-db.sh:/docker-entrypoint-initdb.d/10-travelgo.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  postgres-data:
+  app-storage:
+  caddy-data:
+  caddy-config:

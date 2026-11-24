@@ -1,0 +1,18 @@
+{$TGO_DOMAIN} {
+    root * /var/www/html/public
+    encode gzip
+    @hidden path_regexp hidden (^|/)\.
+    respond @hidden 404
+    php_fastcgi app:9000
+    file_server
+    header X-Content-Type-Options nosniff
+}
+
+:8080 {
+    @ready path /up
+    handle @ready {
+        root * /var/www/html/public
+        php_fastcgi app:9000
+    }
+    respond 404
+}
