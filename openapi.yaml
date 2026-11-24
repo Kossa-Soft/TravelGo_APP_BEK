@@ -8,6 +8,9 @@ info:
     Access tokens last 15 minutes. Refresh tokens are rotated on use, and each new refresh token lasts 60 days.
 servers:
   - url: /v1
+    description: Current deployment
+  - url: https://travel-go-api.kossasoft.com/v1
+    description: Staging for mobile integration
 tags:
   - name: Authentication
 paths:
