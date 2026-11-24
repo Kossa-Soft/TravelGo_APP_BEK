@@ -5,7 +5,10 @@
     respond @hidden 404
     php_fastcgi app:9000
     file_server
-    header X-Content-Type-Options nosniff
+    header {
+        X-Content-Type-Options nosniff
+        ?X-Robots-Tag "noindex, nofollow"
+    }
 }
 
 :8080 {

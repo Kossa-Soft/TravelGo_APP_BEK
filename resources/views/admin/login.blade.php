@@ -3,8 +3,10 @@
 
 @section('content')
     <section class="card login">
-        <div class="brand"><span class="mark" aria-hidden="true">T</span>TravelGo</div>
-        <h1>Вход в админку</h1>
+        <div class="login-header">
+            <img class="brand-logo" src="{{ asset('travelgo-logo.png') }}" width="1000" height="1000" alt="TravelGo">
+            <h1>Вход в админку</h1>
+        </div>
         @if ($errors->any())
             <div class="notice error" role="alert">{{ $errors->first() }}</div>
         @endif

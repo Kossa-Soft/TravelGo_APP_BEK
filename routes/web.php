@@ -3,11 +3,11 @@
 use App\Http\Controllers\AccountDeletionController;
 use App\Http\Controllers\Admin\IntegrationController;
 use App\Http\Controllers\Admin\SessionController;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::get('/', fn (): Response => response()->view('errors.403', status: 403)
+    ->header('Cache-Control', 'private, no-store'));
 
 Route::get('account/delete', [AccountDeletionController::class, 'show'])
     ->middleware('cache.headers:private;no_store')->name('account.delete');

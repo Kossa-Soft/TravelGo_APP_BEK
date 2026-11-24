@@ -1,2 +1,3 @@
+# Search indexing is disabled by the X-Robots-Tag response header.
 User-agent: *
 Disallow:

@@ -2,11 +2,6 @@
 @section('title', 'Интеграции')
 
 @section('content')
-    <header>
-        <h1>Интеграции</h1>
-        <p class="muted">Подключайте сервисы, которые использует TravelGo.</p>
-    </header>
-
     @if (session('status'))
         <div class="notice" role="status">{{ session('status') }}</div>
     @endif
@@ -30,7 +25,7 @@
         </div>
 
         @if ($canUpdate)
-            <form class="fields" method="post" action="{{ route('admin.integrations.update') }}" autocomplete="off">
+            <form class="fields integration-fields" method="post" action="{{ route('admin.integrations.update') }}" autocomplete="off">
                 @csrf
                 @method('PATCH')
 
@@ -54,7 +49,9 @@
                     <small>Подтверждает право изменить настройки.</small>
                 </label>
 
-                <button type="submit" class="primary">Сохранить</button>
+                <div class="form-actions">
+                    <button type="submit" class="primary">Сохранить</button>
+                </div>
             </form>
 
             @if ($hasKey)
