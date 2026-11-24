@@ -1,0 +1,424 @@
+openapi: 3.1.0
+info:
+  title: TravelGo Mobile API
+  version: 1.0.0
+  description: |
+    Responses use camelCase keys. Show localized errors by error.code.
+    Use the server-provided expiresIn and resendIn values for timers.
+    Access tokens last 15 minutes. Refresh tokens are rotated on use, and each new refresh token lasts 60 days.
+servers:
+  - url: /v1
+tags:
+  - name: Authentication
+paths:
+  /auth/register/start:
+    post:
+      tags: [Authentication]
+      operationId: startRegistration
+      summary: Request a registration code
+      parameters:
+        - $ref: '#/components/parameters/Language'
+      requestBody:
+        $ref: '#/components/requestBodies/Credentials'
+      responses:
+        '200':
+          $ref: '#/components/responses/Challenge'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '409':
+          description: PHONE_ALREADY_REGISTERED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: WEAK_PASSWORD
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/SmsUnavailable'
+  /auth/register/verify:
+    post:
+      tags: [Authentication]
+      operationId: verifyRegistration
+      summary: Confirm a registration code and create an account
+      requestBody:
+        $ref: '#/components/requestBodies/VerificationCode'
+      responses:
+        '201':
+          $ref: '#/components/responses/AuthenticatedSession'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          $ref: '#/components/responses/VerificationNotFound'
+        '409':
+          description: PHONE_ALREADY_REGISTERED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          $ref: '#/components/responses/RejectedCode'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /auth/code/resend:
+    post:
+      tags: [Authentication]
+      operationId: resendCode
+      summary: Replace the previous SMS code on the same challenge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [verificationId]
+              properties:
+                verificationId:
+                  $ref: '#/components/schemas/VerificationId'
+      responses:
+        '200':
+          description: Updated expiration and resend timers in seconds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CodeTiming'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          $ref: '#/components/responses/VerificationNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/SmsUnavailable'
+  /auth/login:
+    post:
+      tags: [Authentication]
+      operationId: login
+      summary: Sign in with a phone number and password
+      requestBody:
+        $ref: '#/components/requestBodies/Credentials'
+      responses:
+        '200':
+          $ref: '#/components/responses/AuthenticatedSession'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          description: INVALID_CREDENTIALS for both an unknown number and an incorrect password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      operationId: refreshSession
+      summary: Replace both tokens using a single-use refresh token
+      description: Serialize refresh requests on the client. The old access and refresh tokens cease to work when rotation succeeds.
+      requestBody:
+        $ref: '#/components/requestBodies/RefreshToken'
+      responses:
+        '200':
+          description: New token pair
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      operationId: logout
+      summary: Revoke the session for the supplied refresh token
+      requestBody:
+        $ref: '#/components/requestBodies/RefreshToken'
+      responses:
+        '204':
+          description: Session revoked or already absent
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+  /auth/password/forgot:
+    post:
+      tags: [Authentication]
+      operationId: startPasswordRecovery
+      summary: Request a password recovery code
+      description: Returns the same response structure for registered and unknown phone numbers.
+      parameters:
+        - $ref: '#/components/parameters/Language'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  $ref: '#/components/schemas/Phone'
+      responses:
+        '200':
+          $ref: '#/components/responses/Challenge'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/SmsUnavailable'
+  /auth/password/verify:
+    post:
+      tags: [Authentication]
+      operationId: verifyPasswordRecovery
+      summary: Exchange a recovery code for a one-time reset token
+      requestBody:
+        $ref: '#/components/requestBodies/VerificationCode'
+      responses:
+        '200':
+          description: One-time reset token valid for 15 minutes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [resetToken, expiresIn]
+                properties:
+                  resetToken: { type: string }
+                  expiresIn: { type: integer, example: 900 }
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          $ref: '#/components/responses/VerificationNotFound'
+        '422':
+          $ref: '#/components/responses/RejectedCode'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /auth/password/reset:
+    post:
+      tags: [Authentication]
+      operationId: resetPassword
+      summary: Change the password and revoke all mobile sessions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resetToken, newPassword]
+              properties:
+                resetToken: { type: string, minLength: 1, maxLength: 128 }
+                newPassword:
+                  $ref: '#/components/schemas/NewPassword'
+      responses:
+        '204':
+          description: Password changed
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          description: RESET_TOKEN_INVALID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: WEAK_PASSWORD
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /me:
+    get:
+      tags: [Authentication]
+      operationId: getCurrentUser
+      summary: Read the signed-in user's profile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Opaque access token returned by the authentication endpoints.
+  parameters:
+    Language:
+      in: header
+      name: Accept-Language
+      schema: { type: string, example: uk }
+      description: Preferred language (uk, en, de, es, fr). Defaults to uk.
+  requestBodies:
+    Credentials:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [phone, password]
+            properties:
+              phone:
+                $ref: '#/components/schemas/Phone'
+              password:
+                type: string
+                minLength: 1
+                maxLength: 72
+                description: Registration requires at least 8 characters. Passwords use at most 72 bytes.
+    VerificationCode:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [verificationId, code]
+            properties:
+              verificationId:
+                $ref: '#/components/schemas/VerificationId'
+              code:
+                type: string
+                pattern: '^[0-9]{4}$'
+                example: '0123'
+    RefreshToken:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [refreshToken]
+            properties:
+              refreshToken: { type: string, minLength: 1, maxLength: 128 }
+  responses:
+    AuthenticatedSession:
+      description: Token pair and authenticated profile
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/TokenPair'
+              - type: object
+                required: [user]
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+    Challenge:
+      description: Verification challenge
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/CodeTiming'
+              - type: object
+                required: [verificationId, codeLength]
+                properties:
+                  verificationId:
+                    $ref: '#/components/schemas/VerificationId'
+                  codeLength: { type: integer, const: 4 }
+    InvalidInput:
+      description: VALIDATION_ERROR or INVALID_PHONE
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RejectedCode:
+      description: WRONG_CODE or CODE_EXPIRED. WRONG_CODE includes details.attemptsLeft.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    VerificationNotFound:
+      description: VERIFICATION_NOT_FOUND for missing or consumed challenges
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: UNAUTHORIZED or TOKEN_EXPIRED
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    SmsUnavailable:
+      description: SMS_UNAVAILABLE when verification delivery is disabled outside of test environments
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimited:
+      description: RATE_LIMITED, RESEND_TOO_EARLY or TOO_MANY_ATTEMPTS
+      headers:
+        Retry-After:
+          description: Seconds before retry. Present for RATE_LIMITED and RESEND_TOO_EARLY.
+          schema: { type: integer }
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    Phone:
+      type: string
+      pattern: '^\+[1-9][0-9]{6,14}$'
+      example: '+12025550147'
+    NewPassword:
+      type: string
+      minLength: 8
+      maxLength: 72
+      description: Use at most 72 bytes.
+    VerificationId:
+      type: string
+      format: uuid
+    CodeTiming:
+      type: object
+      required: [expiresIn, resendIn]
+      properties:
+        expiresIn: { type: integer, example: 600 }
+        resendIn: { type: integer, example: 45 }
+    TokenPair:
+      type: object
+      required: [accessToken, refreshToken]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+    User:
+      type: object
+      required: [id, phone, firstName, lastName, middleName, birthDate, avatarUrl, language, plan, planUntil, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        phone:
+          $ref: '#/components/schemas/Phone'
+        firstName: { type: [string, 'null'] }
+        lastName: { type: [string, 'null'] }
+        middleName: { type: [string, 'null'] }
+        birthDate: { type: [string, 'null'], format: date }
+        avatarUrl: { type: [string, 'null'], format: uri }
+        language: { type: string, enum: [uk, en, de, es, fr] }
+        plan: { type: string, enum: [free, pro] }
+        planUntil: { type: [string, 'null'], format: date }
+        createdAt: { type: string, format: date-time }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, details]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            field: { type: string }
+            details:
+              type: object
+              properties:
+                retryAfter: { type: integer }
+                attemptsLeft: { type: integer }

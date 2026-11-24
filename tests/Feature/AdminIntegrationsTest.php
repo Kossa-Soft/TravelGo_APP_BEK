@@ -153,11 +153,11 @@ class AdminIntegrationsTest extends TestCase
         $this->assertSame($encryptedKey, $setting->refresh()->getRawOriginal('api_key'));
         $this->assertSame('TravelGo', $setting->sender);
         $this->assertDatabaseCount('integration_audit_events', 2);
-        $this->assertDatabaseHas('integration_audit_events', [
-            'admin_user_id' => $admin->id,
-            'integration_setting_id' => $setting->id,
-            'changed_fields' => '["api_key"]',
-        ]);
+        $firstChange = DB::table('integration_audit_events')
+            ->where('admin_user_id', $admin->id)
+            ->where('integration_setting_id', $setting->id)
+            ->orderBy('id')->value('changed_fields');
+        $this->assertSame(['api_key'], json_decode((string) $firstChange, true));
 
         $this->assertStringNotContainsString('test-alpha-token', DB::table('integration_audit_events')->pluck('changed_fields')->implode(' '));
     }
