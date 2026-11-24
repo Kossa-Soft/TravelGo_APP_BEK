@@ -66,4 +66,4 @@ main() {
     printf 'TravelGo %s is healthy at %s\n' "$revision" "$public_url"
 }
 
-main "$@"
+main "$@" < /dev/null
