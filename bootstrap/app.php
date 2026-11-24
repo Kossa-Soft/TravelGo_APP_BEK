@@ -17,12 +17,12 @@ return Application::configure(basePath: dirname(__DIR__))
         apiPrefix: 'v1',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->trimStrings(except: ['newPassword']);
+        $middleware->trimStrings(except: ['currentPassword', 'newPassword']);
         $middleware->redirectGuestsTo(fn (Request $request) => $request->is('admin', 'admin/*') ? route('admin.login') : '/');
         $middleware->redirectUsersTo(fn (Request $request) => $request->is('admin', 'admin/*') ? route('admin.integrations.show') : '/');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->dontFlash(['api_key', 'admin_password', 'code', 'phone', 'newPassword', 'accessToken', 'refreshToken', 'resetToken']);
+        $exceptions->dontFlash(['api_key', 'admin_password', 'code', 'phone', 'newPhone', 'currentPassword', 'newPassword', 'accessToken', 'refreshToken', 'resetToken']);
         $exceptions->dontReport([MobileApiException::class]);
 
         $exceptions->render(function (ValidationException $exception, Request $request) {
@@ -44,7 +44,8 @@ return Application::configure(basePath: dirname(__DIR__))
                 403 => 'FORBIDDEN',
                 404 => 'NOT_FOUND',
                 405 => 'METHOD_NOT_ALLOWED',
-                413 => 'REQUEST_TOO_LARGE',
+                429 => 'RATE_LIMITED',
+                413 => $request->is('v1/me/avatar') ? 'FILE_TOO_LARGE' : 'REQUEST_TOO_LARGE',
                 default => $status >= 500 ? 'SERVER_ERROR' : 'INVALID_REQUEST',
             };
 

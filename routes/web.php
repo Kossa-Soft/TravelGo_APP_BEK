@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AccountDeletionController;
 use App\Http\Controllers\Admin\IntegrationController;
 use App\Http\Controllers\Admin\SessionController;
 use Illuminate\Support\Facades\Route;
@@ -7,6 +8,11 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('account/delete', [AccountDeletionController::class, 'show'])
+    ->middleware('cache.headers:private;no_store')->name('account.delete');
+Route::post('account/delete', [AccountDeletionController::class, 'destroy'])
+    ->middleware('throttle:15,1')->name('account.delete.store');
 
 Route::prefix('admin')->name('admin.')->middleware('cache.headers:private;no_store')->group(function (): void {
     Route::middleware('guest:admin')->group(function (): void {

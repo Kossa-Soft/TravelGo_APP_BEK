@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Exceptions\MobileApiException;
+use App\Jobs\SendPhoneChangedSms;
 use App\Jobs\SendVerificationSms;
 use App\Models\MobileSession;
 use App\Models\PhoneVerification;
 use App\Models\User;
+use App\Notifications\AccountSecurityNotification;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -34,6 +36,28 @@ class MobileAuth
         $userId = User::query()->where('phone', $phone)->value('id');
 
         return $this->startChallenge($phone, 'reset', $language, userId: $userId);
+    }
+
+    public function startPhoneChange(MobileSession $session, string $phone, #[SensitiveParameter] string $password, string $ip): array
+    {
+        $this->limitPasswordAttempts($session->user->phone, $ip);
+
+        return DB::transaction(function () use ($session, $phone, $password, $ip): array {
+            $user = $this->lockUser($session);
+            $this->requirePassword($user, $password, 'password');
+
+            if ($phone === $user->phone) {
+                throw new MobileApiException('SAME_PHONE', 422, 'Enter a different phone number.', 'newPhone');
+            }
+
+            if (User::query()->where('phone', $phone)->exists()) {
+                throw $this->phoneAlreadyRegistered('newPhone');
+            }
+
+            $this->limitSms($phone, $ip);
+
+            return $this->startChallenge($phone, 'change_phone', $user->language, userId: $user->id);
+        });
     }
 
     private function startChallenge(string $phone, string $purpose, string $language, ?string $passwordHash = null, ?int $userId = null): array
@@ -128,21 +152,25 @@ class MobileAuth
         return app()->environment('local', 'testing', 'staging');
     }
 
-    private function challenge(string $id, ?string $purpose = null, bool $lock = false): PhoneVerification
+    private function challenge(string $id, ?string $purpose = null, bool $lock = false, ?int $owner = null): PhoneVerification
     {
         $verification = PhoneVerification::query()->whereKey($id)
             ->whereNull('consumed_at')->where('created_at', '>', now()->subDay())
             ->when($purpose !== null, fn ($query) => $query->where('purpose', $purpose))
+            ->when($owner !== null, fn ($query) => $query->where('user_id', $owner))
             ->when($lock, fn ($query) => $query->lockForUpdate())->first();
 
         return $verification ?? throw new MobileApiException('VERIFICATION_NOT_FOUND', 404, 'Verification not found.');
     }
 
-    public function verify(string $id, #[SensitiveParameter] string $code, string $purpose): array
+    public function verify(string $id, #[SensitiveParameter] string $code, string $purpose, ?MobileSession $session = null): array
     {
         try {
-            $result = DB::transaction(function () use ($id, $code, $purpose): array|MobileApiException {
-                $verification = $this->challenge($id, $purpose, lock: true);
+            $result = DB::transaction(function () use ($id, $code, $purpose, $session): array|MobileApiException {
+                $owner = $purpose === 'change_phone'
+                    ? $this->lockUser($session ?? throw new MobileApiException('UNAUTHORIZED', 401, 'A valid access token is required.'))
+                    : null;
+                $verification = $this->challenge($id, $purpose, lock: true, owner: $owner?->id);
 
                 if ($verification->expires_at->timestamp <= now()->timestamp) {
                     throw new MobileApiException('CODE_EXPIRED', 422, 'Verification code expired.', 'code');
@@ -175,6 +203,10 @@ class MobileAuth
                     return ['resetToken' => $token, 'expiresIn' => config('mobile_auth.reset_seconds')];
                 }
 
+                if ($owner !== null) {
+                    return $this->completePhoneChange($owner, $verification->phone, $session);
+                }
+
                 if (User::query()->where('phone', $verification->phone)->exists()) {
                     throw $this->phoneAlreadyRegistered();
                 }
@@ -191,8 +223,8 @@ class MobileAuth
                 return $this->issueSession($user);
             });
         } catch (UniqueConstraintViolationException $exception) {
-            if ($purpose === 'register' && User::query()->where('phone', PhoneVerification::query()->whereKey($id)->value('phone'))->exists()) {
-                throw $this->phoneAlreadyRegistered();
+            if (in_array($purpose, ['register', 'change_phone'], true) && User::query()->where('phone', PhoneVerification::query()->whereKey($id)->value('phone'))->exists()) {
+                throw $this->phoneAlreadyRegistered($purpose === 'change_phone' ? 'newPhone' : 'phone');
             }
 
             throw $exception;
@@ -205,10 +237,54 @@ class MobileAuth
         return $result;
     }
 
-    public function login(string $phone, #[SensitiveParameter] string $password, string $ip): array
+    private function completePhoneChange(User $user, string $phone, MobileSession $session): array
+    {
+        if (User::query()->where('phone', $phone)->exists()) {
+            throw $this->phoneAlreadyRegistered('newPhone');
+        }
+
+        $previousPhone = $user->phone;
+        $user->phone = $phone;
+        $user->save();
+
+        $this->clearAccountChallenges($user);
+        $this->revokeOtherSessions($session);
+        $user->notify(new AccountSecurityNotification('phone_changed'));
+
+        if ($previousPhone !== null && config('mobile_auth.send_sms')) {
+            SendPhoneChangedSms::dispatch($previousPhone, $user->language)
+                ->onConnection('database')->onQueue('mobile-sms');
+        }
+
+        return $this->profile($user);
+    }
+
+    public function requirePassword(User $user, #[SensitiveParameter] string $password, string $field): void
+    {
+        if (! Hash::check($password, $user->password)) {
+            throw new MobileApiException('WRONG_PASSWORD', 401, 'The current password is incorrect.', $field);
+        }
+    }
+
+    public function limitPasswordAttempts(string $phone, string $ip): void
     {
         $this->limit('login:ip', $ip, config('mobile_auth.login_per_ip'), 900);
         $this->limit('login:phone', $phone, config('mobile_auth.login_per_phone'), 900);
+    }
+
+    public function clearAccountChallenges(User $user): void
+    {
+        PhoneVerification::query()->where('user_id', $user->id)->delete();
+    }
+
+    public function revokeOtherSessions(MobileSession $session): void
+    {
+        MobileSession::query()->where('user_id', $session->user_id)->whereKeyNot($session->id)->delete();
+    }
+
+    public function login(string $phone, #[SensitiveParameter] string $password, string $ip): array
+    {
+        $this->limitPasswordAttempts($phone, $ip);
 
         return (new Timebox)->call(function (Timebox $timebox) use ($phone, $password): array {
             $result = DB::transaction(function () use ($phone, $password): ?array {
@@ -253,11 +329,7 @@ class MobileAuth
             $user->password = $password;
             $user->save();
 
-            PhoneVerification::query()->where('user_id', $user->id)->where('purpose', 'reset')->update([
-                'consumed_at' => now(),
-                'reset_token_hash' => null,
-                'reset_expires_at' => null,
-            ]);
+            $this->clearAccountChallenges($user);
             MobileSession::query()->where('user_id', $user->id)->delete();
         });
     }
@@ -285,6 +357,11 @@ class MobileAuth
 
     public function me(#[SensitiveParameter] ?string $token): array
     {
+        return $this->profile($this->authenticate($token)->user);
+    }
+
+    public function authenticate(#[SensitiveParameter] ?string $token): MobileSession
+    {
         $session = $token !== null && preg_match('/\A[a-f0-9]{64}\z/', $token)
             ? MobileSession::query()->with('user')->where('access_token_hash', hash('sha256', $token))->first()
             : null;
@@ -297,7 +374,20 @@ class MobileAuth
             throw new MobileApiException('TOKEN_EXPIRED', 401, 'Access token expired.');
         }
 
-        return $this->profile($session->user);
+        return $session;
+    }
+
+    public function lockUser(MobileSession $session): User
+    {
+        $user = User::query()->lockForUpdate()->find($session->user_id);
+
+        if ($user === null || ! MobileSession::query()->whereKey($session->id)
+            ->where('access_token_hash', $session->access_token_hash)
+            ->where('access_expires_at', '>', now())->exists()) {
+            throw new MobileApiException('UNAUTHORIZED', 401, 'A valid access token is required.');
+        }
+
+        return $user;
     }
 
     private function issueSession(User $user): array
@@ -321,16 +411,16 @@ class MobileAuth
         return ['accessToken' => $accessToken, 'refreshToken' => $refreshToken];
     }
 
-    private function profile(User $user): array
+    public function profile(User $user): array
     {
         return [
             'id' => $user->public_id,
             'phone' => $user->phone,
-            'firstName' => null,
-            'lastName' => null,
-            'middleName' => null,
-            'birthDate' => null,
-            'avatarUrl' => null,
+            'firstName' => $user->first_name,
+            'lastName' => $user->last_name,
+            'middleName' => $user->middle_name,
+            'birthDate' => $user->birth_date?->format('Y-m-d'),
+            'avatarUrl' => $user->avatar_id === null ? null : AvatarImages::url($user->public_id, $user->avatar_id),
             'language' => $user->language,
             'plan' => 'free',
             'planUntil' => null,
@@ -364,8 +454,8 @@ class MobileAuth
         }
     }
 
-    private function phoneAlreadyRegistered(): MobileApiException
+    private function phoneAlreadyRegistered(string $field = 'phone'): MobileApiException
     {
-        return new MobileApiException('PHONE_ALREADY_REGISTERED', 409, 'Phone number is already registered.', 'phone');
+        return new MobileApiException('PHONE_ALREADY_REGISTERED', 409, 'Phone number is already registered.', $field);
     }
 }

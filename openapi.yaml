@@ -13,6 +13,7 @@ servers:
     description: Staging for mobile integration
 tags:
   - name: Authentication
+  - name: Profile
 paths:
   /auth/register/start:
     post:
@@ -251,6 +252,245 @@ paths:
                 $ref: '#/components/schemas/User'
         '401':
           $ref: '#/components/responses/Unauthorized'
+    patch:
+      tags: [Profile]
+      operationId: updateCurrentUser
+      summary: Update the supplied personal details
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdate'
+      responses:
+        '200':
+          $ref: '#/components/responses/CurrentProfile'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: INVALID_NAME or INVALID_DATE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Profile]
+      operationId: deleteCurrentAccount
+      summary: Delete the account, personal data and all sessions
+      security:
+        - bearerAuth: []
+      requestBody:
+        $ref: '#/components/requestBodies/CurrentPassword'
+      responses:
+        '204':
+          description: Account deleted and sessions revoked
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/ProfileUnauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /me/password/verify:
+    post:
+      tags: [Profile]
+      operationId: verifyCurrentPassword
+      summary: Check the current password
+      security:
+        - bearerAuth: []
+      requestBody:
+        $ref: '#/components/requestBodies/CurrentPassword'
+      responses:
+        '204':
+          description: Password verified
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/ProfileUnauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /me/password:
+    post:
+      tags: [Profile]
+      operationId: changeCurrentPassword
+      summary: Update the account password and revoke other sessions
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string, minLength: 1, maxLength: 72 }
+                newPassword:
+                  $ref: '#/components/schemas/NewPassword'
+      responses:
+        '204':
+          description: Password changed, current session retained
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/ProfileUnauthorized'
+        '422':
+          description: WEAK_PASSWORD or SAME_PASSWORD
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /me/phone/start:
+    post:
+      tags: [Profile]
+      operationId: startPhoneChange
+      summary: Confirm the current password and request an SMS at the new number
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password, newPhone]
+              properties:
+                password: { type: string, minLength: 1, maxLength: 72 }
+                newPhone:
+                  $ref: '#/components/schemas/Phone'
+      responses:
+        '200':
+          $ref: '#/components/responses/Challenge'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/ProfileUnauthorized'
+        '409':
+          description: PHONE_ALREADY_REGISTERED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: SAME_PHONE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/SmsUnavailable'
+  /me/phone/verify:
+    post:
+      tags: [Profile]
+      operationId: verifyPhoneChange
+      summary: Confirm the new number and revoke other sessions
+      security:
+        - bearerAuth: []
+      requestBody:
+        $ref: '#/components/requestBodies/VerificationCode'
+      responses:
+        '200':
+          $ref: '#/components/responses/CurrentProfile'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/VerificationNotFound'
+        '409':
+          description: PHONE_ALREADY_REGISTERED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          $ref: '#/components/responses/RejectedCode'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /me/avatar:
+    post:
+      tags: [Profile]
+      operationId: uploadAvatar
+      summary: Upload or replace the avatar
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: JPEG, PNG or WebP up to 5 MB and 16 megapixels.
+      responses:
+        '200':
+          description: New avatar URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [avatarUrl]
+                properties:
+                  avatarUrl: { type: string, format: uri }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: FILE_TOO_LARGE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: INVALID_IMAGE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    delete:
+      tags: [Profile]
+      operationId: deleteAvatar
+      summary: Delete the current avatar
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Avatar deleted or already absent
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /avatars/{user}/{avatar}/{size}.webp:
+    parameters:
+      - { in: path, name: user, required: true, schema: {type: string, format: uuid} }
+      - { in: path, name: avatar, required: true, schema: {type: string, format: uuid} }
+      - { in: path, name: size, required: true, schema: {type: integer, enum: [256, 512]} }
+    get:
+      tags: [Profile]
+      operationId: readAvatar
+      summary: Read one active avatar size at the URL returned by the profile
+      responses:
+        '200':
+          description: Avatar without original image metadata
+          content:
+            image/webp:
+              schema: { type: string, format: binary }
+        '404':
+          description: Avatar absent, deleted or replaced
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     bearerAuth:
@@ -264,6 +504,15 @@ components:
       schema: { type: string, example: uk }
       description: Preferred language (uk, en, de, es, fr). Defaults to uk.
   requestBodies:
+    CurrentPassword:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [password]
+            properties:
+              password: { type: string, minLength: 1, maxLength: 72 }
     Credentials:
       required: true
       content:
@@ -303,6 +552,18 @@ components:
             properties:
               refreshToken: { type: string, minLength: 1, maxLength: 128 }
   responses:
+    CurrentProfile:
+      description: Updated account profile
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/User'
+    ProfileUnauthorized:
+      description: WRONG_PASSWORD, UNAUTHORIZED or TOKEN_EXPIRED
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     AuthenticatedSession:
       description: Token pair and authenticated profile
       content:
@@ -369,6 +630,14 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
   schemas:
+    ProfileUpdate:
+      type: object
+      properties:
+        firstName: { type: string, minLength: 1, maxLength: 50 }
+        lastName: { type: string, minLength: 1, maxLength: 50 }
+        middleName: { type: [string, 'null'], maxLength: 50 }
+        birthDate: { type: [string, 'null'], format: date }
+        language: { type: string, enum: [uk, en, de, es, fr] }
     Phone:
       type: string
       pattern: '^\+[1-9][0-9]{6,14}$'

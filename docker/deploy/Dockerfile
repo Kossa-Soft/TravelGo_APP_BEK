@@ -11,9 +11,11 @@ RUN npm run build
 
 FROM php:8.5-fpm-bookworm AS php-runtime
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpq-dev \
-    && docker-php-ext-install -j"$(nproc)" pdo_pgsql pcntl \
+    && apt-get install -y --no-install-recommends libpq-dev libjpeg62-turbo-dev libpng-dev libwebp-dev \
+    && docker-php-ext-configure gd --with-jpeg --with-webp \
+    && docker-php-ext-install -j"$(nproc)" pdo_pgsql pcntl gd exif \
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
+    && printf '%s\n' 'upload_max_filesize=5M' 'post_max_size=8M' > "$PHP_INI_DIR/conf.d/travelgo-uploads.ini" \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /var/www/html
 

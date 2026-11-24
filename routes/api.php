@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Mobile\AuthController;
+use App\Http\Controllers\Mobile\ProfileController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function (): void {
@@ -16,3 +17,13 @@ Route::prefix('auth')->group(function (): void {
 });
 
 Route::get('me', [AuthController::class, 'me']);
+Route::patch('me', [ProfileController::class, 'update']);
+Route::delete('me', [ProfileController::class, 'destroy']);
+Route::post('me/password/verify', [ProfileController::class, 'verifyPassword']);
+Route::post('me/password', [ProfileController::class, 'changePassword']);
+Route::post('me/phone/start', [ProfileController::class, 'startPhoneChange']);
+Route::post('me/phone/verify', [ProfileController::class, 'verifyPhoneChange']);
+Route::post('me/avatar', [ProfileController::class, 'uploadAvatar'])->middleware('throttle:30,1');
+Route::delete('me/avatar', [ProfileController::class, 'deleteAvatar']);
+Route::get('avatars/{user}/{avatar}/{size}.webp', [ProfileController::class, 'avatar'])
+    ->whereUuid(['user', 'avatar'])->where('size', '256|512');

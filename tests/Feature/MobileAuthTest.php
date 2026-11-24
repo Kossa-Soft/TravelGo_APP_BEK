@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Jobs\SendVerificationSms;
 use App\Models\IntegrationSetting;
 use App\Models\MobileSession;
+use App\Services\AlphaSms;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
@@ -161,8 +162,8 @@ class MobileAuthTest extends TestCase
         foreach ($jobs as $payload) {
             $job = unserialize(decrypt(json_decode($payload, true)['data']['command']));
             $this->assertInstanceOf(SendVerificationSms::class, $job);
-            $job->handle();
-            $job->handle();
+            $job->handle(app(AlphaSms::class));
+            $job->handle(app(AlphaSms::class));
         }
 
         Http::assertSentCount(1);
