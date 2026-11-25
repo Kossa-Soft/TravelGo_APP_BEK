@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Mobile\AuthController;
+use App\Http\Controllers\Mobile\CatalogController;
 use App\Http\Controllers\Mobile\ProfileController;
+use App\Http\Controllers\Mobile\SavedRouteController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function (): void {
@@ -27,3 +29,20 @@ Route::post('me/avatar', [ProfileController::class, 'uploadAvatar'])->middleware
 Route::delete('me/avatar', [ProfileController::class, 'deleteAvatar']);
 Route::get('avatars/{user}/{avatar}/{size}.webp', [ProfileController::class, 'avatar'])
     ->whereUuid(['user', 'avatar'])->where('size', '256|512');
+
+Route::middleware('throttle:catalog')->group(function (): void {
+    $contentId = '[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*';
+    Route::get('geo/locate', [CatalogController::class, 'locate']);
+    Route::get('places/nearby', [CatalogController::class, 'nearbyPlaces']);
+    Route::get('places/in-area', [CatalogController::class, 'mapPlaces']);
+    Route::get('places/{id}', [CatalogController::class, 'place'])->where('id', $contentId);
+    Route::get('routes/nearby', [CatalogController::class, 'nearbyRoutes']);
+    Route::get('routes/{id}', [CatalogController::class, 'route'])->where('id', $contentId);
+    Route::get('cities', [CatalogController::class, 'cities']);
+    Route::get('me/saved-routes', [SavedRouteController::class, 'index']);
+    Route::post('me/saved-routes/import', [SavedRouteController::class, 'import']);
+    Route::put('me/saved-routes/{id}', [SavedRouteController::class, 'store'])->where('id', $contentId);
+    Route::delete('me/saved-routes/{id}', [SavedRouteController::class, 'destroy'])->where('id', $contentId);
+});
+Route::get('catalog-media/{id}/{type}/{image}/{size}.webp', [CatalogController::class, 'media'])
+    ->whereUuid(['id', 'image'])->where(['type' => 'cities|places|routes', 'size' => '400|1200'])->name('mobile.catalog.media');

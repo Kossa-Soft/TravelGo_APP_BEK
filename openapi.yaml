@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TravelGo Mobile API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     Responses use camelCase keys. Show localized errors by error.code.
     Use the server-provided expiresIn and resendIn values for timers.
@@ -14,6 +14,7 @@ servers:
 tags:
   - name: Authentication
   - name: Profile
+  - name: Content
 paths:
   /auth/register/start:
     post:
@@ -491,6 +492,659 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /geo/locate:
+    get:
+      tags:
+        - Content
+      operationId: locateCatalogCity
+      summary: Locate the published city, region and country
+      parameters:
+        - name: Accept-Language
+          in: query
+          required: false
+          schema:
+            type: string
+            example: uk
+          description: Preferred content language. Missing translations fall back to English.
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+      description: Coordinates are rounded to three decimal places for calculations and are not saved in server logs or
+        the database.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeoLocation'
+          headers:
+            ETag:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+                example: private, max-age=120
+        '304':
+          description: Content unchanged
+        '400':
+          description: INVALID_COORDINATES, INVALID_CURSOR or VALIDATION_ERROR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /places/nearby:
+    get:
+      tags:
+        - Content
+      operationId: listNearbyPlaces
+      summary: Find nearby published places
+      parameters:
+        - name: Accept-Language
+          in: query
+          required: false
+          schema:
+            type: string
+            example: uk
+          description: Preferred content language. Missing translations fall back to English.
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+        - name: maxKm
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 1000
+          description: Comma-separated place categories.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 1536
+          description: Opaque cursor from the preceding page with the same coordinates and filters.
+      description: Coordinates are rounded to three decimal places for calculations and are not saved in server logs or
+        the database.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NearbyPlaces'
+          headers:
+            ETag:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+                example: private, max-age=120
+        '304':
+          description: Content unchanged
+        '400':
+          description: INVALID_COORDINATES, INVALID_CURSOR or VALIDATION_ERROR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /places/in-area:
+    get:
+      tags:
+        - Content
+      operationId: listCatalogMarkers
+      summary: Get markers in a map viewport
+      parameters:
+        - name: Accept-Language
+          in: query
+          required: false
+          schema:
+            type: string
+            example: uk
+          description: Preferred content language. Missing translations fall back to English.
+        - name: minLat
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: minLng
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+        - name: maxLat
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: maxLng
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 1000
+          description: Comma-separated place categories.
+      description: Coordinates are rounded to three decimal places for calculations and are not saved in server logs or
+        the database.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CatalogMarker'
+                maxItems: 200
+          headers:
+            ETag:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+                example: private, max-age=120
+        '304':
+          description: Content unchanged
+        '400':
+          description: INVALID_COORDINATES, INVALID_CURSOR or VALIDATION_ERROR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /places/{id}:
+    get:
+      tags:
+        - Content
+      operationId: getCatalogPlace
+      summary: Read a published place
+      parameters:
+        - name: Accept-Language
+          in: query
+          required: false
+          schema:
+            type: string
+            example: uk
+          description: Preferred content language. Missing translations fall back to English.
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/CatalogId'
+        - name: lat
+          in: query
+          required: false
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: lng
+          in: query
+          required: false
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+      description: Coordinates are rounded to three decimal places for calculations and are not saved in server logs or
+        the database.
+      security:
+        - {}
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogPlaceDetails'
+          headers:
+            ETag:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+                example: private, max-age=300
+        '304':
+          description: Content unchanged
+        '400':
+          description: INVALID_COORDINATES, INVALID_CURSOR or VALIDATION_ERROR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: NOT_FOUND for missing or unpublished content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /routes/nearby:
+    get:
+      tags:
+        - Content
+      operationId: listNearbyRoutes
+      summary: Get local and nearby routes
+      parameters:
+        - name: Accept-Language
+          in: query
+          required: false
+          schema:
+            type: string
+            example: uk
+          description: Preferred content language. Missing translations fall back to English.
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+        - name: maxKm
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 150
+        - name: transport
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - walk
+              - car
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 1536
+          description: Opaque cursor from the preceding page with the same coordinates and filters.
+      description: Coordinates are rounded to three decimal places for calculations and are not saved in server logs or
+        the database.
+      security:
+        - {}
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NearbyRoutes'
+          headers:
+            ETag:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+                example: private, max-age=120
+        '304':
+          description: Content unchanged
+        '400':
+          description: INVALID_COORDINATES, INVALID_CURSOR or VALIDATION_ERROR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /routes/{id}:
+    get:
+      tags:
+        - Content
+      operationId: getCatalogRoute
+      summary: Read a published route
+      parameters:
+        - name: Accept-Language
+          in: query
+          required: false
+          schema:
+            type: string
+            example: uk
+          description: Preferred content language. Missing translations fall back to English.
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/CatalogId'
+      security:
+        - {}
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRouteDetails'
+          headers:
+            ETag:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+                example: private, max-age=300
+        '304':
+          description: Content unchanged
+        '400':
+          description: INVALID_COORDINATES, INVALID_CURSOR or VALIDATION_ERROR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: NOT_FOUND for missing or unpublished content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /cities:
+    get:
+      tags:
+        - Content
+      operationId: listCatalogCities
+      summary: List published cities with visible routes
+      parameters:
+        - name: Accept-Language
+          in: query
+          required: false
+          schema:
+            type: string
+            example: uk
+          description: Preferred content language. Missing translations fall back to English.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CatalogCity'
+          headers:
+            ETag:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+                example: private, max-age=300
+        '304':
+          description: Content unchanged
+        '400':
+          description: INVALID_COORDINATES, INVALID_CURSOR or VALIDATION_ERROR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /catalog-media/{id}/{type}/{image}/{size}.webp:
+    get:
+      tags:
+        - Content
+      operationId: getCatalogMedia
+      summary: Read an image referenced by a visible catalog item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - cities
+              - places
+              - routes
+        - name: image
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: size
+          in: path
+          required: true
+          schema:
+            type: integer
+            enum:
+              - 400
+              - 1200
+      responses:
+        '200':
+          description: WebP content
+          content:
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: NOT_FOUND for missing or unpublished content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /me/saved-routes:
+    get:
+      tags:
+        - Content
+      operationId: listSavedRoutes
+      summary: List the signed-in user’s saved routes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: Accept-Language
+          in: query
+          required: false
+          schema:
+            type: string
+            example: uk
+          description: Preferred content language. Missing translations fall back to English.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 1536
+          description: Opaque cursor from the preceding page with the same coordinates and filters.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedRoutesPage'
+        '400':
+          description: INVALID_COORDINATES, INVALID_CURSOR or VALIDATION_ERROR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /me/saved-routes/{id}:
+    put:
+      tags:
+        - Content
+      operationId: saveCatalogRoute
+      summary: Save a published route
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/CatalogId'
+      responses:
+        '204':
+          description: Bookmark change applied
+        '404':
+          description: NOT_FOUND for missing or unpublished content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    delete:
+      tags:
+        - Content
+      operationId: removeSavedRoute
+      summary: Remove a saved route
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/CatalogId'
+      responses:
+        '204':
+          description: Bookmark change applied
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /me/saved-routes/import:
+    post:
+      tags:
+        - Content
+      operationId: importSavedRoutes
+      summary: Import bookmarks from the device by slug or UUID
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedRouteImport'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedRouteImportResult'
+        '400':
+          description: INVALID_COORDINATES, INVALID_CURSOR or VALIDATION_ERROR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
 components:
   securitySchemes:
     bearerAuth:
@@ -694,3 +1348,604 @@ components:
               properties:
                 retryAfter: { type: integer }
                 attemptsLeft: { type: integer }
+    CatalogId:
+      type: string
+      maxLength: 160
+      pattern: ^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$
+      description: Stable content slug or UUID. Imported records are returned by their original slugs.
+    CatalogCityRef:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          $ref: '#/components/schemas/CatalogId'
+        name:
+          type: string
+    CatalogCountryRef:
+      type: object
+      required:
+        - code
+        - name
+      properties:
+        code:
+          type: string
+          pattern: ^[A-Z]{2}$
+        name:
+          type: string
+    CatalogCity:
+      type: object
+      required:
+        - id
+        - name
+        - country
+        - latitude
+        - longitude
+        - routesCount
+      properties:
+        id:
+          $ref: '#/components/schemas/CatalogId'
+        name:
+          type: string
+        country:
+          $ref: '#/components/schemas/CatalogCountryRef'
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        routesCount:
+          type: integer
+          minimum: 0
+    GeoLocation:
+      type: object
+      required:
+        - city
+        - region
+        - country
+      properties:
+        city:
+          anyOf:
+            - type: object
+              required:
+                - id
+                - name
+                - distanceKm
+                - timeZone
+              properties:
+                id:
+                  $ref: '#/components/schemas/CatalogId'
+                name:
+                  type: string
+                distanceKm:
+                  type: number
+                timeZone:
+                  type: string
+            - type: 'null'
+        region:
+          anyOf:
+            - $ref: '#/components/schemas/CatalogCityRef'
+            - type: 'null'
+        country:
+          anyOf:
+            - $ref: '#/components/schemas/CatalogCountryRef'
+            - type: 'null'
+    CatalogMarker:
+      type: object
+      required:
+        - id
+        - name
+        - category
+        - latitude
+        - longitude
+        - priority
+      properties:
+        id:
+          $ref: '#/components/schemas/CatalogId'
+        name:
+          type: string
+        category:
+          type: string
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 5
+    CatalogHours:
+      anyOf:
+        - oneOf:
+            - const: always
+            - type: object
+              required:
+                - open
+                - close
+              properties:
+                open:
+                  type: string
+                  pattern: ^[0-9]{2}:[0-9]{2}$
+                close:
+                  type: string
+                  pattern: ^[0-9]{2}:[0-9]{2}$
+                closedOn:
+                  type: array
+                  items:
+                    type: integer
+                    minimum: 0
+                    maximum: 6
+                  uniqueItems: true
+                  maxItems: 7
+        - type: 'null'
+    CatalogImage:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          format: uri
+        credit:
+          type: string
+    CatalogPlaceCard:
+      type: object
+      required:
+        - id
+        - name
+        - category
+        - shortDescription
+        - address
+        - latitude
+        - longitude
+        - distanceKm
+        - image
+        - hours
+        - timeZone
+        - city
+        - routesCount
+      properties:
+        id:
+          $ref: '#/components/schemas/CatalogId'
+        name:
+          type: string
+        category:
+          type: string
+        shortDescription:
+          type: string
+        address:
+          type: string
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        distanceKm:
+          type:
+            - number
+            - 'null'
+        image:
+          anyOf:
+            - type: string
+              format: uri
+            - type: 'null'
+        hours:
+          $ref: '#/components/schemas/CatalogHours'
+        timeZone:
+          type: string
+        city:
+          $ref: '#/components/schemas/CatalogCityRef'
+        routesCount:
+          type: integer
+          minimum: 0
+    CatalogPlaceDetails:
+      allOf:
+        - $ref: '#/components/schemas/CatalogPlaceCard'
+        - type: object
+          required:
+            - description
+            - history
+            - facts
+            - images
+            - website
+            - visitMinutes
+            - wiki
+            - routes
+          properties:
+            description:
+              type: array
+              items:
+                type: string
+            history:
+              type: array
+              items:
+                type: string
+            facts:
+              type: array
+              items:
+                type: string
+            images:
+              type: array
+              items:
+                $ref: '#/components/schemas/CatalogImage'
+            website:
+              anyOf:
+                - type: string
+                  format: uri
+                - type: 'null'
+            visitMinutes:
+              type: integer
+              minimum: 0
+            wiki:
+              type:
+                - string
+                - 'null'
+            routes:
+              type: array
+              items:
+                $ref: '#/components/schemas/CatalogRouteCard'
+    CatalogPoint:
+      type: object
+      required:
+        - name
+        - latitude
+        - longitude
+      properties:
+        name:
+          type: string
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        placeId:
+          $ref: '#/components/schemas/CatalogId'
+    CatalogRouteCard:
+      type: object
+      required:
+        - id
+        - title
+        - description
+        - coverImage
+        - coverCredit
+        - city
+        - country
+        - region
+        - durationMinutes
+        - distanceKm
+        - placesCount
+        - badge
+        - rating
+        - reviewsCount
+        - usedCount
+        - travelersCount
+        - isOfficial
+        - transport
+        - source
+        - start
+        - isSaved
+      properties:
+        id:
+          $ref: '#/components/schemas/CatalogId'
+        title:
+          type: string
+        description:
+          type: string
+        coverImage:
+          anyOf:
+            - type: string
+              format: uri
+            - type: 'null'
+        coverCredit:
+          type:
+            - string
+            - 'null'
+        city:
+          $ref: '#/components/schemas/CatalogCityRef'
+        country:
+          $ref: '#/components/schemas/CatalogCountryRef'
+        region:
+          anyOf:
+            - $ref: '#/components/schemas/CatalogCityRef'
+            - type: 'null'
+        durationMinutes:
+          type: integer
+          minimum: 0
+        distanceKm:
+          type: number
+        placesCount:
+          type: integer
+          minimum: 0
+        badge:
+          type:
+            - string
+            - 'null'
+        rating:
+          type:
+            - number
+            - 'null'
+        reviewsCount:
+          type: integer
+          minimum: 0
+        usedCount:
+          type: integer
+          minimum: 0
+        travelersCount:
+          type: integer
+          minimum: 0
+        isOfficial:
+          type: boolean
+        transport:
+          type: string
+          enum:
+            - walk
+            - car
+        source:
+          type: object
+          required:
+            - kind
+          properties:
+            kind:
+              type: string
+              enum:
+                - travelgo
+                - guide
+                - user
+        start:
+          $ref: '#/components/schemas/CatalogPoint'
+        isSaved:
+          type: boolean
+    CatalogStop:
+      type: object
+      required:
+        - position
+        - visitMinutes
+        - note
+        - place
+      properties:
+        position:
+          type: integer
+          minimum: 0
+        visitMinutes:
+          type: integer
+          minimum: 0
+        note:
+          type:
+            - string
+            - 'null'
+        place:
+          type: object
+          required:
+            - id
+            - name
+            - description
+            - address
+            - latitude
+            - longitude
+            - hours
+            - images
+            - wiki
+          properties:
+            id:
+              $ref: '#/components/schemas/CatalogId'
+            name:
+              type: string
+            description:
+              type: string
+            address:
+              type: string
+            latitude:
+              type: number
+              minimum: -90
+              maximum: 90
+            longitude:
+              type: number
+              minimum: -180
+              maximum: 180
+            hours:
+              $ref: '#/components/schemas/CatalogHours'
+            images:
+              type: array
+              items:
+                type: string
+                format: uri
+            wiki:
+              type:
+                - string
+                - 'null'
+    CatalogLineString:
+      type: object
+      required:
+        - type
+        - coordinates
+      properties:
+        type:
+          const: LineString
+        coordinates:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+            minItems: 2
+            maxItems: 2
+          minItems: 2
+    CatalogRouteDetails:
+      allOf:
+        - $ref: '#/components/schemas/CatalogRouteCard'
+        - type: object
+          required:
+            - about
+            - timeZone
+            - stops
+            - end
+            - isLoop
+            - path
+          properties:
+            about:
+              type: array
+              items:
+                type: string
+            timeZone:
+              type: string
+            stops:
+              type: array
+              items:
+                $ref: '#/components/schemas/CatalogStop'
+            end:
+              $ref: '#/components/schemas/CatalogPoint'
+            isLoop:
+              type: boolean
+            path:
+              anyOf:
+                - $ref: '#/components/schemas/CatalogLineString'
+                - type: 'null'
+    NearbyPlaces:
+      type: object
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogPlaceCard'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    NearbyRoutes:
+      type: object
+      required:
+        - city
+        - items
+        - nextCursor
+        - suggestion
+      properties:
+        city:
+          anyOf:
+            - $ref: '#/components/schemas/CatalogCityRef'
+            - type: 'null'
+        items:
+          type: array
+          items:
+            type: object
+            required:
+              - scope
+              - distanceKm
+              - route
+            properties:
+              scope:
+                type: string
+                enum:
+                  - city
+                  - nearby
+              distanceKm:
+                type: number
+              route:
+                $ref: '#/components/schemas/CatalogRouteCard'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+        suggestion:
+          anyOf:
+            - type: object
+              required:
+                - cities
+              properties:
+                cities:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - id
+                      - name
+                      - distanceKm
+                      - routesCount
+                      - latitude
+                      - longitude
+                    properties:
+                      id:
+                        $ref: '#/components/schemas/CatalogId'
+                      name:
+                        type: string
+                      distanceKm:
+                        type: number
+                      routesCount:
+                        type: integer
+                        minimum: 0
+                      latitude:
+                        type: number
+                        minimum: -90
+                        maximum: 90
+                      longitude:
+                        type: number
+                        minimum: -180
+                        maximum: 180
+            - type: 'null'
+    SavedRoutesPage:
+      type: object
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/CatalogRouteCard'
+              - type: object
+                required:
+                  - id
+                  - status
+                properties:
+                  id:
+                    $ref: '#/components/schemas/CatalogId'
+                  status:
+                    type: string
+                    enum:
+                      - hidden
+                      - archived
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    SavedRouteImport:
+      type: object
+      required:
+        - routeIds
+      properties:
+        routeIds:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogId'
+          maxItems: 100
+    SavedRouteImportResult:
+      type: object
+      required:
+        - savedIds
+        - unavailableIds
+      properties:
+        savedIds:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogId'
+        unavailableIds:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogId'

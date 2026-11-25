@@ -11,7 +11,7 @@ use Throwable;
 
 class TravelGoImages
 {
-    public function store(UploadedFile $file, string $type): string
+    public function store(UploadedFile $file, string $type, ?string $id = null): string
     {
         $info = @getimagesize($file->getPathname());
         if ($info === false || ! in_array($info[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)
@@ -24,7 +24,7 @@ class TravelGoImages
             throw ValidationException::withMessages(['file' => 'Изображение не удалось прочитать.']);
         }
 
-        $id = (string) Str::uuid();
+        $id ??= (string) Str::uuid();
         $disk = Storage::disk('local');
         try {
             foreach ([400, 1200] as $size) {

@@ -64,7 +64,7 @@
     @endif
     @if ($hasCover)
         <label>Ссылка на обложку<input name="coverImage" type="url" maxlength="2048" value="{{ old('coverImage', $viewModel['coverImage'] ?? null) }}"></label>
-        <label>Автор или лицензия обложки<input name="coverCredit" maxlength="300" value="{{ old('coverCredit', $viewModel['coverCredit'] ?? null) }}"></label>
+        <label>Автор или лицензия обложки<input name="coverCredit" maxlength="2000" value="{{ old('coverCredit', $viewModel['coverCredit'] ?? null) }}"></label>
     @endif
     @if ($isPlace)
         <label>Категория
@@ -169,7 +169,7 @@
             @endif
             <div class="editor-grid">
                 <label>Ссылка на фото {{ $index + 1 }}<input type="url" name="images[{{ $index }}][url]" maxlength="2048" value="{{ is_string($photo['url'] ?? null) ? $photo['url'] : '' }}"></label>
-                <label>Автор или лицензия<input name="images[{{ $index }}][credit]" maxlength="300" value="{{ is_string($photo['credit'] ?? null) ? $photo['credit'] : '' }}"></label>
+                <label>Автор или лицензия<input name="images[{{ $index }}][credit]" maxlength="2000" value="{{ is_string($photo['credit'] ?? null) ? $photo['credit'] : '' }}"></label>
             </div>
         @endforeach
     </details>

@@ -52,7 +52,7 @@
                 <form class="fields" method="post" enctype="multipart/form-data" action="{{ route('admin.travelgo.upload', [$type, $record->publicKey()]) }}">
                     @csrf
                     <label>JPEG, PNG или WebP, до 10 МБ <input type="file" name="file" accept="image/jpeg,image/png,image/webp" required></label>
-                    <label>Автор или лицензия<input name="credit" maxlength="300"></label>
+                    <label>Автор или лицензия<input name="credit" maxlength="2000"></label>
                     <button type="submit">Загрузить</button>
                 </form>
             </section>

@@ -24,6 +24,8 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::define('staff.manage', fn (AdminUser $admin): bool => $admin->is_superadmin);
 
+        RateLimiter::for('catalog', fn (Request $request): Limit => Limit::perMinute(60)->by($request->ip()));
+
         RateLimiter::for('admin-login', function (Request $request): array {
             $email = $request->input('email');
             $email = is_string($email) ? Str::lower(Str::limit($email, 255, '')) : '';

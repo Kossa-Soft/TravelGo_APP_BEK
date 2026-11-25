@@ -80,7 +80,7 @@ class TravelGoFields
                 'images' => ['sometimes', 'array', 'list', 'max:12'],
                 'images.*' => ['required', 'array:url,credit'],
                 'images.*.url' => ['required', 'url:https,http', 'max:2048'],
-                'images.*.credit' => ['nullable', 'string', 'max:300'],
+                'images.*.credit' => ['nullable', 'string', 'max:2000'],
                 'visitMinutes' => ['nullable', 'integer', 'between:1,1440'],
                 'website' => ['nullable', 'url:https,http', 'max:2048'],
                 'wiki' => ['nullable', 'string', 'max:200'],
@@ -151,7 +151,7 @@ class TravelGoFields
     {
         return [
             'coverImage' => ['nullable', 'url:https,http', 'max:2048'],
-            'coverCredit' => ['nullable', 'string', 'max:300'],
+            'coverCredit' => ['nullable', 'string', 'max:2000'],
         ];
     }
 }

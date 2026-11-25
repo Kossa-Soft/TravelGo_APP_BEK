@@ -354,7 +354,7 @@ class TravelGoController extends Controller
     {
         $actor = $this->authorizeAction($request, $type, 'edit');
         abort_unless(in_array($type, [TravelGoType::City, TravelGoType::Place, TravelGoType::Route], true), 404);
-        $input = $request->validate(['file' => ['required', 'file', 'max:10240'], 'credit' => ['nullable', 'string', 'max:300']]);
+        $input = $request->validate(['file' => ['required', 'file', 'max:10240'], 'credit' => ['nullable', 'string', 'max:2000']]);
         $this->catalog->find($type, $id);
         $image = $images->store($input['file'], $type->value);
         $url = route('admin.travelgo.media', [$type, $image, 1200]);

@@ -3,6 +3,7 @@
 use App\Exceptions\ContentException;
 use App\Exceptions\MobileApiException;
 use App\Http\Middleware\PreventSearchIndexing;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -27,6 +28,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->dontFlash(['api_key', 'admin_password', 'code', 'phone', 'newPhone', 'currentPassword', 'newPassword', 'accessToken', 'refreshToken', 'resetToken']);
         $exceptions->dontReport([ContentException::class, MobileApiException::class]);
+        $exceptions->dontReportWhen(fn (Throwable $exception): bool => $exception instanceof QueryException
+            && request()->is('v1/geo/*', 'v1/places/*', 'v1/routes/nearby'));
 
         $exceptions->render(function (ValidationException $exception, Request $request) {
             if ($request->is('v1', 'v1/*')) {

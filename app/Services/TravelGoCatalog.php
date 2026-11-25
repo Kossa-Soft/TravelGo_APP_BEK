@@ -30,21 +30,21 @@ class TravelGoCatalog
         return TravelGoContent::ofType($type)->where($type === TravelGoType::Country ? 'country_code' : 'id', $id)->firstOrFail();
     }
 
-    public function save(TravelGoType $type, ?string $id, array $input, AdminUser $actor): TravelGoContent
+    public function save(TravelGoType $type, ?string $id, array $input, ?AdminUser $actor, bool $calculateGeometry = true): TravelGoContent
     {
-        return $this->write(function () use ($type, $id, $input, $actor): TravelGoContent {
+        return $this->write(function () use ($type, $id, $input, $actor, $calculateGeometry): TravelGoContent {
             $record = $id === null ? new TravelGoContent : $this->find($type, $id);
             $record->type = $type;
             $this->applyFields($record, $input);
             $geometryFields = array_fill_keys(['start', 'end', 'isLoop', 'durationOverride'], true);
             $original = $record->getOriginal('data') ?? [];
-            $recalculate = $type === TravelGoType::Route && ($id === null || $record->isDirty('parent_id')
+            $recalculate = $calculateGeometry && $type === TravelGoType::Route && ($id === null || $record->isDirty('parent_id')
                 || array_intersect_key($record->data, $geometryFields) != array_intersect_key($original, $geometryFields));
             $record->save();
             if ($recalculate && $this->recalculate($record, useProvider: true)) {
                 $record->save();
             }
-            if ($record->status === ContentStatus::Published) {
+            if ($record->status === ContentStatus::Published && ($calculateGeometry || $type !== TravelGoType::Route)) {
                 $this->checkPublishable($record);
             }
             $this->audit($record, $actor, $id === null ? 'create' : 'edit', ['fields' => array_keys($input)]);
@@ -171,9 +171,9 @@ class TravelGoCatalog
         return null;
     }
 
-    public function replaceStops(string $id, array $stops, AdminUser $admin): TravelGoContent
+    public function replaceStops(string $id, array $stops, ?AdminUser $admin, bool $useProvider = true): TravelGoContent
     {
-        return $this->write(function () use ($id, $stops, $admin): TravelGoContent {
+        return $this->write(function () use ($id, $stops, $admin, $useProvider): TravelGoContent {
             $route = $this->find(TravelGoType::Route, $id);
             $places = TravelGoContent::ofType(TravelGoType::Place)->whereIn('id', array_column($stops, 'placeId'))->get()->keyBy('id');
             $rows = [];
@@ -190,7 +190,7 @@ class TravelGoCatalog
             if ($rows !== []) {
                 DB::table('travelgo_route_stops')->insert($rows);
             }
-            $this->recalculate($route, useProvider: true);
+            $this->recalculate($route, useProvider: $useProvider);
             $route->save();
             if ($route->status === ContentStatus::Published) {
                 $this->checkPublishable($route);
@@ -307,6 +307,11 @@ class TravelGoCatalog
 
             return $published;
         });
+    }
+
+    public function publishImported(TravelGoContent $record): void
+    {
+        $this->changeStatus($record, ContentStatus::Published, null, null, false, null);
     }
 
     private function changeStatus(TravelGoContent $record, ContentStatus $target, ?string $reason, ?string $time, bool $force, ?AdminUser $admin): void
@@ -486,7 +491,7 @@ class TravelGoCatalog
     {
         return $this->write(function () use ($id, $admin): TravelGoContent {
             $route = $this->find(TravelGoType::Route, $id);
-            $copy = $route->replicate(['location', 'status', 'publish_at', 'published_at', 'status_reason', 'status_changed_at', 'status_changed_by']);
+            $copy = $route->replicate(['location', 'country_boundary', 'slug', 'import_hash', 'status', 'publish_at', 'published_at', 'status_reason', 'status_changed_at', 'status_changed_by']);
             $copy->status = ContentStatus::Draft;
             $copy->save();
             $rows = DB::table('travelgo_route_stops')->where('route_id', $route->id)->get()
@@ -544,7 +549,7 @@ class TravelGoCatalog
         throw ValidationException::withMessages([$field => $message]);
     }
 
-    private function write(Closure $callback): mixed
+    public function write(Closure $callback): mixed
     {
         return DB::transaction(function () use ($callback): mixed {
             if (DB::getDriverName() === 'pgsql') {
