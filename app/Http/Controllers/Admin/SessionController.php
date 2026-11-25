@@ -58,7 +58,9 @@ class SessionController extends Controller
 
         $request->session()->regenerate();
 
-        return to_route('admin.integrations.show');
+        return $guard->user()->hasPermission('integrations.alphasms.view')
+            ? to_route('admin.integrations.show')
+            : to_route('admin.travelgo.home');
     }
 
     private function requiresTotp(): bool

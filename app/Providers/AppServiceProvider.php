@@ -22,6 +22,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('integrations.alphasms.view', fn (AdminUser $admin): bool => $admin->hasPermission('integrations.alphasms.view'));
         Gate::define('integrations.alphasms.update', fn (AdminUser $admin): bool => $admin->hasPermission('integrations.alphasms.update'));
 
+        Gate::define('staff.manage', fn (AdminUser $admin): bool => $admin->is_superadmin);
+
         RateLimiter::for('admin-login', function (Request $request): array {
             $email = $request->input('email');
             $email = is_string($email) ? Str::lower(Str::limit($email, 255, '')) : '';

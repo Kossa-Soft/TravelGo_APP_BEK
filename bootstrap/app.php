@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\ContentException;
 use App\Exceptions\MobileApiException;
 use App\Http\Middleware\PreventSearchIndexing;
 use Illuminate\Foundation\Application;
@@ -21,11 +22,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->prepend(PreventSearchIndexing::class);
         $middleware->trimStrings(except: ['currentPassword', 'newPassword']);
         $middleware->redirectGuestsTo(fn (Request $request) => $request->is('admin', 'admin/*') ? route('admin.login') : '/');
-        $middleware->redirectUsersTo(fn (Request $request) => $request->is('admin', 'admin/*') ? route('admin.integrations.show') : '/');
+        $middleware->redirectUsersTo(fn (Request $request) => $request->is('admin', 'admin/*') ? route('admin.home') : '/');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->dontFlash(['api_key', 'admin_password', 'code', 'phone', 'newPhone', 'currentPassword', 'newPassword', 'accessToken', 'refreshToken', 'resetToken']);
-        $exceptions->dontReport([MobileApiException::class]);
+        $exceptions->dontReport([ContentException::class, MobileApiException::class]);
 
         $exceptions->render(function (ValidationException $exception, Request $request) {
             if ($request->is('v1', 'v1/*')) {
@@ -64,6 +65,6 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*', 'v1', 'v1/*') || $request->expectsJson(),
+            fn (Request $request) => $request->is('api/*', 'v1', 'v1/*', 'admin/v1/*') || $request->expectsJson(),
         );
     })->create();

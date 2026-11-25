@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'travelgo' => [
+        'geocoder_url' => env('TRAVELGO_GEOCODER_URL'),
+        'geonames_username' => env('TRAVELGO_GEONAMES_USERNAME'),
+        'osrm_url' => env('TRAVELGO_OSRM_URL'),
+    ],
+
 ];

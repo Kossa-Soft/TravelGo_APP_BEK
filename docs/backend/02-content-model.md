@@ -4,10 +4,14 @@
 ([03-mobile-content-api.md](03-mobile-content-api.md)) и наполняет
 админка ([04-admin-api.md](04-admin-api.md)).
 
+> **Места и маршруты рядом, регионы, старт/финиш маршрута и статусы
+> публикации** — в [08-nearby-and-travelgo-content.md](08-nearby-and-travelgo-content.md).
+> Там же полный список новых полей; ниже они коротко отмечены.
+
 ## Как устроено
 
 ```
-Страна ─┬─ Город ─┬─ Место (точка на карте)
+Страна ─┬─ (Регион) ─ Город ─┬─ Место (точка на карте)
         │         │
         │         └─ Маршрут ── упорядоченный список мест (остановки)
         │                 │
@@ -43,8 +47,14 @@
 |---|---|---|
 | `code` | `string` | ISO 3166-1 alpha-2: `UA`, `FR`. Ключ |
 | `name` | `Localized` | «Франція», «France» |
-| `isPublished` | `boolean` | Видна ли в приложении |
+| `status` | `ContentStatus` | Статус публикации ([08, раздел 5](08-nearby-and-travelgo-content.md#5-статусы-публикации-контента)) |
 | `sortOrder` | `number` | Порядок в списках (меньше — выше) |
+
+## Регион — `Region`
+
+Область / провинция: `id`, `countryCode`, `name` (`Localized`),
+`status`, `sortOrder`. Город может быть без региона. Подробно — в
+[08](08-nearby-and-travelgo-content.md#регион--region-новое).
 
 Список стран можно заполнить заранее (все ~250), публиковать — по мере
 появления маршрутов.
@@ -59,7 +69,9 @@
 | `latitude`, `longitude` | `number` | Центр города (для карты) |
 | `timeZone` | `string` | IANA: `Europe/Paris`. Нужен, чтобы «Открыто / Закрыто» считалось по местному времени |
 | `coverImage` | `string` | URL обложки |
-| `isPublished` | `boolean` | |
+| `regionId` | `uuid \| null` | Регион |
+| `radiusKm` | `number` | «Зона» города: пользователь ближе — значит, он в этом городе (по умолчанию 15) |
+| `status` | `ContentStatus` | Статус публикации |
 
 ## Место — `Place`
 
@@ -67,12 +79,20 @@
 |---|---|---|
 | `id` | `uuid` | |
 | `cityId` | `uuid` | Город |
+| `category` | `string` | Категория (ключи категорий карты приложения: `museum`, `monument`, `park`…) |
 | `name` | `Localized` | «Ейфелева вежа» |
-| `description` | `Localized` | Коротко, 1 предложение |
+| `shortDescription` | `Localized` | Коротко, 1 предложение (для карточки) |
+| `description` | `Localized[]` | Подробное описание — абзацы |
+| `history` | `Localized[]` | История места — абзацы |
+| `facts` | `Localized[]` | «Цікаво знати» — короткие факты |
 | `address` | `string` | Адрес как есть, на местном языке |
 | `latitude`, `longitude` | `number` | Точка на карте |
 | `hours` | `OpeningHours \| null` | Часы работы (ниже) |
-| `images` | `string[]` | Фото (первое — главное) |
+| `images` | `Image[]` | Фото `{ url, credit }` (первое — главное) |
+| `visitMinutes` | `number` | Обычное время осмотра |
+| `website` | `string \| null` | Официальный сайт |
+| `priority` | `number` | 1–5, важность в выдаче «рядом» |
+| `status` | `ContentStatus` | Статус публикации — место публикуется само по себе и видно «рядом», даже если не входит в маршруты |
 | `wiki` | `string \| null` | Статья Википедии: `Eiffel_Tower` или `uk:Ейфелева_вежа` (сейчас приложение берёт оттуда фото, если своих нет) |
 
 ### Часы работы — `OpeningHours`
@@ -96,17 +116,24 @@
 | Поле | Тип | Описание |
 |---|---|---|
 | `id` | `uuid` | |
-| `cityId` | `uuid` | Город (страна — через город) |
+| `cityId` | `uuid` | Город (страна — через город). Для будущих маршрутов между городами — город старта; города остановок берутся из `stops` |
 | `source` | `object` | Автор: `{ "kind": "travelgo" }`, `{ "kind": "guide", "guideId": "…" }` или `{ "kind": "user", "userId": "…" }` |
 | `title` | `Localized` | «Класичний Париж» |
 | `description` | `Localized` | Короткое, 1–2 предложения (для карточки) |
 | `about` | `Localized[]` | Полное описание — абзацы |
 | `coverImage` | `string` | Обложка |
-| `durationMinutes` | `number` | Сколько идти вместе с осмотром |
-| `distanceKm` | `number` | Длина пешком |
+| `transport` | `string` | Способ передвижения: `walk` (сейчас все маршруты), позже `car`. Заложить сразу, по умолчанию `walk` |
+| `durationMinutes` | `number` | Время в пути вместе с осмотром |
+| `distanceKm` | `number` | Длина маршрута (по дорогам для выбранного `transport`) |
 | `badge` | `string \| null` | Метка на карточке (ниже) |
 | `stops` | `RouteStop[]` | Остановки по порядку |
-| `status` | `string` | `draft` → `pending_review` → `published` / `rejected`, `archived` |
+| `regionId` | `uuid \| null` | Регион |
+| `isOfficial` | `boolean` | Официальный маршрут TravelGo — метка «Маршрут від TravelGo» |
+| `start`, `end` | `RoutePoint` | Начальная и конечная точки: место или точка на карте ([08](08-nearby-and-travelgo-content.md#маршрут--route-дополнения)) |
+| `isLoop` | `boolean` | Кольцевой маршрут |
+| `sortPriority` | `number` | Ручной порядок в выдаче города |
+| `path` | `LineString` | Линия маршрута — считает сервер |
+| `status` | `ContentStatus` | `draft`, `in_review`, `scheduled`, `published`, `hidden`, `rejected`, `archived` — [08, раздел 5](08-nearby-and-travelgo-content.md#5-статусы-публикации-контента) |
 | `publishedAt` | `datetime \| null` | |
 
 Считает сервер (руками не вводятся):
@@ -149,8 +176,9 @@
   «Рекомендовано» и «Популярні».
 - `guide` — маршрут гида (гид позже будет заполнять свой кабинет; пока
   создаём за него в админке).
-- `user` — маршрут пользователя. Публикуется только после проверки в
-  админке. Автора в приложении не показываем.
+- `user` — маршрут пользователя (позже). Публикуется только после
+  проверки в админке (`in_review` → `published` / `rejected`). Автора в
+  приложении не показываем.
 
 ## Гид — `Guide`
 

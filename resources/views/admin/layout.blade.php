@@ -11,6 +11,7 @@
     @auth('admin')
         <script src="{{ asset('travelgo-admin.js') }}" defer></script>
     @endauth
+    @stack("head")
 </head>
 <body>
 @auth('admin')
@@ -26,16 +27,32 @@
                 </button>
             </div>
             <div class="rail-body" id="rail-body">
-                @can('integrations.alphasms.view')
-                    <nav class="rail-nav" aria-label="Панель управления">
+                <nav class="rail-nav" aria-label="Панель управления">
+                    @if (auth('admin')->user()->canOpenTravelGo())
+                        <a class="nav-item" href="{{ route('admin.travelgo.home') }}" @if (request()->routeIs('admin.travelgo.*')) aria-current="page" @endif>
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                                <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>
+                            </svg>
+                            <span class="rail-label">TravelGo</span>
+                        </a>
+                    @endif
+                    @can('staff.manage')
+                        <a class="nav-item" href="{{ route('admin.staff.index') }}" @if (request()->routeIs('admin.staff.*')) aria-current="page" @endif>
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                                <path d="M4 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2m1-6a4 4 0 0 1 3 4v2"/><circle cx="10" cy="7" r="3"/><path d="M16 4a3 3 0 0 1 0 6"/>
+                            </svg>
+                            <span class="rail-label">Администраторы</span>
+                        </a>
+                    @endcan
+                    @can('integrations.alphasms.view')
                         <a class="nav-item" href="{{ route('admin.integrations.show') }}" @if (request()->routeIs('admin.integrations.*')) aria-current="page" @endif>
                             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
                                 <path d="M8 4v5m8-5v5M6 9h12v3a6 6 0 0 1-12 0zm6 9v3"/>
                             </svg>
                             <span class="rail-label">Интеграции</span>
                         </a>
-                    </nav>
-                @endcan
+                    @endcan
+                </nav>
                 <div class="rail-footer">
                     <div class="rail-profile">
                         <span class="profile-icon">

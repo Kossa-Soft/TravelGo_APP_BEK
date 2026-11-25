@@ -3,7 +3,7 @@ set -Eeuo pipefail
 umask 077
 
 main() {
-    local root git_dir previous previous_container revision temp_dump public_url
+    local root git_dir previous previous_container previous_db revision temp_dump public_url attempt
     root=$(cd "$(dirname "$(readlink -f -- "${BASH_SOURCE[0]}")")/../.." && pwd)
     cd "$root"
 
@@ -39,8 +39,23 @@ main() {
         previous=${previous#travelgo-app:}
     fi
 
-    "${compose[@]}" build --pull app web
-    "${compose[@]}" up -d --wait --wait-timeout 90 db
+    "${compose[@]}" build --pull app web db
+    previous_db=$("${compose[@]}" ps --all -q db)
+    if [[ -n "$previous_db" ]]; then
+        docker start "$previous_db" >/dev/null
+        for ((attempt = 0; attempt < 30; attempt++)); do
+            if docker exec "$previous_db" pg_isready -h 127.0.0.1 >/dev/null 2>&1; then
+                break
+            fi
+            sleep 2
+        done
+        if (( attempt == 30 )); then
+            printf 'Existing PostgreSQL did not start. Database image was not replaced.\n' >&2
+            return 1
+        fi
+    else
+        "${compose[@]}" up -d --wait --wait-timeout 90 db
+    fi
 
     mkdir -p -- "$backup_dir"
     temp_dump=$(mktemp --tmpdir="$backup_dir" ".before-$revision.XXXXXXXX")
@@ -51,6 +66,8 @@ main() {
     fi
     mv -- "$temp_dump" "$backup_dir/$(date -u +%Y%m%dT%H%M%SZ)-$revision.dump"
 
+    "${compose[@]}" up -d --wait --wait-timeout 90 db
+    "${compose[@]}" exec -T db sh -c 'psql --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --set ON_ERROR_STOP=1 --command="CREATE EXTENSION IF NOT EXISTS postgis"'
     "${compose[@]}" run --rm --no-deps app php artisan migrate --force --no-interaction
     if ! "${compose[@]}" up -d --no-build --wait --wait-timeout 120; then
         if [[ "$previous" =~ ^[0-9a-f]{40}$ && "$previous" != "$revision" ]]; then

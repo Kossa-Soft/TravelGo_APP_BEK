@@ -62,7 +62,11 @@ services:
       start_period: 10s
 
   db:
-    image: postgres:17-bookworm
+    image: travelgo-postgres:17-bookworm-postgis
+    build:
+      context: ./docker/postgres
+      args:
+        POSTGRES_VERSION: 17-bookworm
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_DATABASE:?Set DB_DATABASE}

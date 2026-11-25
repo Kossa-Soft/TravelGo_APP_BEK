@@ -11,3 +11,5 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('model:prune', ['--model' => [PhoneVerification::class, MobileSession::class]])->daily();
+
+Schedule::command('travelgo:publish-due')->everyMinute()->withoutOverlapping(5);

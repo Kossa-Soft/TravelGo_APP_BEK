@@ -15,7 +15,7 @@ RUN apt-get update \
     && docker-php-ext-configure gd --with-jpeg --with-webp \
     && docker-php-ext-install -j"$(nproc)" pdo_pgsql pcntl gd exif \
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
-    && printf '%s\n' 'upload_max_filesize=5M' 'post_max_size=8M' > "$PHP_INI_DIR/conf.d/travelgo-uploads.ini" \
+    && printf '%s\n' 'upload_max_filesize=10M' 'post_max_size=16M' > "$PHP_INI_DIR/conf.d/travelgo-uploads.ini" \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /var/www/html
 
