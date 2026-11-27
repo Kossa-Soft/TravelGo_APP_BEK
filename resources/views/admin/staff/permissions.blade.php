@@ -30,7 +30,7 @@
                 </table>
             </div>
             <div class="editor-grid">
-                @foreach (['travelgo.publication.view' => 'Очередь публикации', 'travelgo.audit.view' => 'Журнал TravelGo', 'integrations.alphasms.view' => 'Просмотр AlphaSMS', 'integrations.alphasms.update' => 'Настройка AlphaSMS'] as $permission => $label)
+                @foreach (['travelgo.publication.view' => 'Очередь публикации', 'travelgo.audit.view' => 'Журнал TravelGo', 'integrations.alphasms.view' => 'Просмотр AlphaSMS', 'integrations.alphasms.update' => 'Настройка AlphaSMS'] + \App\Http\Controllers\Admin\MobileUserController::PERMISSIONS as $permission => $label)
                     <label class="check-label"><input type="checkbox" name="permissions[]" value="{{ $permission }}" @checked(in_array($permission, $selected, true))>{{ $label }}</label>
                 @endforeach
             </div>

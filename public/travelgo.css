@@ -481,3 +481,19 @@ input[type="checkbox"] { width: 17px; min-height: 17px; margin: 0; accent-color:
 }
 
 .content-photo { display: block; max-width: 200px; max-height: 130px; object-fit: contain; border-radius: var(--control-radius); }
+
+.integration-diagnostics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+    gap: 14px 24px;
+    margin: 20px 0;
+    padding: 14px 0;
+    border-block: 1px solid var(--line);
+}
+
+.integration-diagnostics dt { color: var(--muted); font-size: 12px; }
+.integration-diagnostics dd { margin: 3px 0 0; font-weight: 600; }
+.integration-diagnostics dd.catalog-meta { font-weight: 400; }
+
+.user-summary { display: flex; align-items: center; gap: 14px; }
+.user-avatar { border-radius: 50%; object-fit: cover; }

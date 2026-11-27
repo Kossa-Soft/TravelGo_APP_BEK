@@ -117,11 +117,17 @@ class MobileProfile
             $user = $this->auth->lockUser($session);
             $this->auth->requirePassword($user, $password, 'password');
 
-            $this->queueAvatarDeletion($user);
-            $user->notifications()->delete();
-            PhoneVerification::query()->where('user_id', $user->id)->orWhere('phone', $user->phone)->delete();
-            $user->delete();
+            $this->eraseAccount($user);
         });
+    }
+
+    /** The caller must hold a row lock on the account inside its transaction. */
+    public function eraseAccount(User $user): void
+    {
+        $this->queueAvatarDeletion($user);
+        $user->notifications()->delete();
+        PhoneVerification::query()->where('user_id', $user->id)->orWhere('phone', $user->phone)->delete();
+        $user->delete();
     }
 
     private function queueAvatarDeletion(User $user): void

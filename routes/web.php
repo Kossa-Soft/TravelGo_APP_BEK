@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccountDeletionController;
 use App\Http\Controllers\Admin\IntegrationController;
+use App\Http\Controllers\Admin\MobileUserController;
 use App\Http\Controllers\Admin\SessionController;
 use App\Http\Controllers\Admin\StaffController;
 use App\Http\Controllers\Admin\TravelGoController;
@@ -26,8 +27,13 @@ Route::prefix('admin')->name('admin.')->middleware('cache.headers:private;no_sto
 
     Route::middleware('auth:admin')->group(function (): void {
         Route::get('/', function (Request $request) {
-            return $request->user('admin')->hasPermission('integrations.alphasms.view')
-                ? to_route('admin.integrations.show') : to_route('admin.travelgo.home');
+            $admin = $request->user('admin');
+
+            return match (true) {
+                $admin->hasPermission('integrations.alphasms.view') => to_route('admin.integrations.show'),
+                $admin->hasPermission('users.view') => to_route('admin.users.index'),
+                default => to_route('admin.travelgo.home'),
+            };
         })->name('home');
         Route::post('logout', [SessionController::class, 'destroy'])->name('logout');
 
@@ -69,6 +75,16 @@ Route::prefix('admin')->name('admin.')->middleware('cache.headers:private;no_sto
             Route::post('{type}/{id}/images', [TravelGoController::class, 'upload'])->middleware('throttle:20,1')->name('upload');
             Route::delete('{type}/{id}', [TravelGoController::class, 'destroy'])->name('destroy');
         });
+
+        foreach (['users' => 'users.', 'v1/users' => 'users.api.'] as $prefix => $name) {
+            Route::prefix($prefix)->name($name)->middleware('can:users.view')->group(function (): void {
+                Route::get('/', [MobileUserController::class, 'index'])->name('index');
+                Route::get('audit', [MobileUserController::class, 'journal'])->name('journal');
+                Route::get('{id}', [MobileUserController::class, 'show'])->whereUuid('id')->name('show');
+                Route::patch('{id}', [MobileUserController::class, 'update'])->whereUuid('id')->middleware('throttle:30,1')->name('update');
+                Route::delete('{id}', [MobileUserController::class, 'destroy'])->whereUuid('id')->middleware(['can:users.delete', 'throttle:8,1'])->name('destroy');
+            });
+        }
 
         Route::prefix('staff')->name('staff.')->middleware('can:staff.manage')->group(function (): void {
             Route::get('/', [StaffController::class, 'index'])->name('index');

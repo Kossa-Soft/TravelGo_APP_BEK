@@ -22,6 +22,8 @@ class PhoneVerification extends Model
             'expires_at' => 'datetime',
             'resend_at' => 'datetime',
             'consumed_at' => 'datetime',
+            'sms_claimed_at' => 'datetime',
+            'sms_accepted_at' => 'datetime',
             'reset_expires_at' => 'datetime',
         ];
     }

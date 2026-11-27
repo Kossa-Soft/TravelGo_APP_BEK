@@ -2,21 +2,19 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exceptions\AlphaSmsException;
 use App\Http\Controllers\Controller;
 use App\Models\IntegrationSetting;
-use Illuminate\Http\Client\ConnectionException;
+use App\Services\AlphaSms;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class IntegrationController extends Controller
 {
-    private const string ALPHASMS_BALANCE_URL = 'https://api.alphasms.ua/api/json.php';
-
     public function show(): View
     {
         $settings = IntegrationSetting::query()->where('provider', 'alphasms')->firstOrFail();
@@ -26,6 +24,8 @@ class IntegrationController extends Controller
             'hasKey' => $settings->getRawOriginal('api_key') !== null,
             'updatedAt' => $settings->updated_at,
             'canUpdate' => Gate::allows('integrations.alphasms.update'),
+            'diagnostics' => $settings,
+            'sendSms' => config('mobile_auth.send_sms'),
         ]);
     }
 
@@ -61,6 +61,14 @@ class IntegrationController extends Controller
             $changedFields = array_keys($settings->getDirty());
 
             if ($changedFields !== []) {
+                if (in_array('api_key', $changedFields, true)) {
+                    $settings->balance_amount = null;
+                    $settings->balance_currency = null;
+                    $settings->balance_checked_at = null;
+                    $settings->last_sms_request_id = null;
+                    $settings->last_sms_accepted_at = null;
+                    $settings->last_sms_delivery_status = null;
+                }
                 $settings->save();
 
                 DB::table('integration_audit_events')->insert([
@@ -75,26 +83,22 @@ class IntegrationController extends Controller
         return to_route('admin.integrations.show')->with('status', 'Настройки AlphaSMS сохранены.');
     }
 
-    public function check(): RedirectResponse
+    public function check(AlphaSms $sms): RedirectResponse
     {
         $settings = IntegrationSetting::query()->where('provider', 'alphasms')->firstOrFail();
-        $apiKey = $settings->api_key;
-
-        if ($apiKey === null) {
-            return to_route('admin.integrations.show')->withErrors(['connection' => 'Сначала сохраните ключ AlphaSMS.']);
-        }
 
         try {
-            $response = Http::asJson()->acceptJson()->connectTimeout(3)->timeout(8)->withoutRedirecting()
-                ->post(self::ALPHASMS_BALANCE_URL, ['auth' => $apiKey, 'data' => [['type' => 'balance']]]);
+            $sms->refreshBalance($settings);
+        } catch (AlphaSmsException $exception) {
+            $message = match ($exception->reason) {
+                'settings_missing' => 'Сначала сохраните ключ AlphaSMS.',
+                'unreachable', 'rate_limited' => 'AlphaSMS недоступен. Повторите проверку позже.',
+                default => 'AlphaSMS не подтвердил подключение. Проверьте ключ и настройки кабинета.',
+            };
 
-            if ($response->successful() && $response->json('success') === true && $response->json('data.0.success') === true) {
-                return to_route('admin.integrations.show')->with('status', 'AlphaSMS принял ключ. Подключение работает.');
-            }
-        } catch (ConnectionException) {
-            return to_route('admin.integrations.show')->withErrors(['connection' => 'AlphaSMS недоступен. Повторите проверку позже.']);
+            return to_route('admin.integrations.show')->withErrors(['connection' => $message]);
         }
 
-        return to_route('admin.integrations.show')->withErrors(['connection' => 'AlphaSMS не подтвердил подключение. Проверьте ключ и настройки кабинета.']);
+        return to_route('admin.integrations.show')->with('status', 'Баланс AlphaSMS обновлён.');
     }
 }

@@ -60,7 +60,7 @@ class StaffController extends Controller
     {
         abort_if($admin->is_superadmin, 404);
         $allowed = ['travelgo.*', 'travelgo.publication.view', 'travelgo.audit.view',
-            'integrations.alphasms.view', 'integrations.alphasms.update'];
+            'integrations.alphasms.view', 'integrations.alphasms.update', ...array_keys(MobileUserController::PERMISSIONS)];
         foreach (TravelGoType::cases() as $type) {
             foreach (array_keys(TravelGoFields::actions()) as $action) {
                 $allowed[] = $type->permission($action);

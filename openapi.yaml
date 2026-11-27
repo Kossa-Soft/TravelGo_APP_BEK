@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TravelGo Mobile API
-  version: 1.1.0
+  version: 1.2.0
   description: |
     Responses use camelCase keys. Show localized errors by error.code.
     Use the server-provided expiresIn and resendIn values for timers.
@@ -114,6 +114,12 @@ paths:
           $ref: '#/components/responses/InvalidInput'
         '401':
           description: INVALID_CREDENTIALS for both an unknown number and an incorrect password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: ACCOUNT_BLOCKED after successful password validation
           content:
             application/json:
               schema:
@@ -1329,8 +1335,14 @@ components:
         birthDate: { type: [string, 'null'], format: date }
         avatarUrl: { type: [string, 'null'], format: uri }
         language: { type: string, enum: [uk, en, de, es, fr] }
-        plan: { type: string, enum: [free, pro] }
-        planUntil: { type: [string, 'null'], format: date }
+        plan:
+          type: string
+          enum: [free, pro]
+          description: Effective plan. An expired PRO entitlement returns free.
+        planUntil:
+          type: [string, 'null']
+          format: date-time
+          description: UTC expiry of an active PRO plan. Null for free or indefinite PRO.
         createdAt: { type: string, format: date-time }
     ErrorResponse:
       type: object

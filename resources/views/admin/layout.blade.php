@@ -36,6 +36,14 @@
                             <span class="rail-label">TravelGo</span>
                         </a>
                     @endif
+                    @can('users.view')
+                        <a class="nav-item" href="{{ route('admin.users.index') }}" @if (request()->routeIs('admin.users.*')) aria-current="page" @endif>
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                                <circle cx="9" cy="8" r="3"/><path d="M3 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2m1-8a3 3 0 0 0 0-6m1 8a4 4 0 0 1 4 4v2"/>
+                            </svg>
+                            <span class="rail-label">Пользователи</span>
+                        </a>
+                    @endcan
                     @can('staff.manage')
                         <a class="nav-item" href="{{ route('admin.staff.index') }}" @if (request()->routeIs('admin.staff.*')) aria-current="page" @endif>
                             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">

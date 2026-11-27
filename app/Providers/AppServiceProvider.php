@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Http\Controllers\Admin\MobileUserController;
 use App\Models\AdminUser;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -23,6 +24,10 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('integrations.alphasms.update', fn (AdminUser $admin): bool => $admin->hasPermission('integrations.alphasms.update'));
 
         Gate::define('staff.manage', fn (AdminUser $admin): bool => $admin->is_superadmin);
+
+        foreach (array_keys(MobileUserController::PERMISSIONS) as $permission) {
+            Gate::define($permission, fn (AdminUser $admin): bool => $admin->hasPermission($permission));
+        }
 
         RateLimiter::for('catalog', fn (Request $request): Limit => Limit::perMinute(60)->by($request->ip()));
 

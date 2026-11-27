@@ -33,9 +33,12 @@ class MobileAuth
     public function startRecovery(string $phone, string $language, string $ip): array
     {
         $this->limitSms($phone, $ip);
-        $userId = User::query()->where('phone', $phone)->value('id');
 
-        return $this->startChallenge($phone, 'reset', $language, userId: $userId);
+        return DB::transaction(function () use ($phone, $language): array {
+            $userId = User::query()->where('phone', $phone)->whereNull('blocked_at')->lockForUpdate()->value('id');
+
+            return $this->startChallenge($phone, 'reset', $language, userId: $userId);
+        });
     }
 
     public function startPhoneChange(MobileSession $session, string $phone, #[SensitiveParameter] string $password, string $ip): array
@@ -127,6 +130,7 @@ class MobileAuth
         $verification->resend_at = now()->addSeconds(config('mobile_auth.resend_seconds'));
         $verification->delivery_id = (string) Str::uuid();
         $verification->sms_claimed_at = null;
+        $verification->sms_accepted_at = null;
         $verification->save();
 
         if ($demoCode === null && config('mobile_auth.send_sms')) {
@@ -183,7 +187,7 @@ class MobileAuth
 
                 if (! hash_equals($verification->code_hash, self::codeHash($id, $code))
                     || ($purpose === 'reset' && $verification->user_id === null)
-                    || ($verification->sms_claimed_at === null && $this->demoCode($verification->phone) !== $code)) {
+                    || ($verification->sms_accepted_at === null && $this->demoCode($verification->phone) !== $code)) {
                     $verification->attempts++;
                     $verification->save();
 
@@ -294,6 +298,10 @@ class MobileAuth
                     return null;
                 }
 
+                if ($user->isBlocked()) {
+                    throw new MobileApiException('ACCOUNT_BLOCKED', 403, 'This account is blocked.');
+                }
+
                 if (Hash::needsRehash($user->password)) {
                     $user->password = $password;
                     $user->save();
@@ -321,7 +329,7 @@ class MobileAuth
                 ->where('reset_expires_at', '>', now())->value('user_id');
             $user = $userId === null ? null : User::query()->lockForUpdate()->find($userId);
 
-            if ($user === null || ! PhoneVerification::query()->where('user_id', $user->id)
+            if ($user === null || $user->isBlocked() || ! PhoneVerification::query()->where('user_id', $user->id)
                 ->where('reset_token_hash', $tokenHash)->where('reset_expires_at', '>', now())->exists()) {
                 throw new MobileApiException('RESET_TOKEN_INVALID', 401, 'Password reset token is invalid or expired.');
             }
@@ -337,7 +345,12 @@ class MobileAuth
     public function refresh(#[SensitiveParameter] string $token): array
     {
         return DB::transaction(function () use ($token): array {
-            $session = MobileSession::query()->where('refresh_token_hash', hash('sha256', $token))->lockForUpdate()->first();
+            $hash = hash('sha256', $token);
+            $userId = MobileSession::query()->where('refresh_token_hash', $hash)->value('user_id');
+            $user = $userId === null ? null : User::query()->lockForUpdate()->find($userId);
+            $session = $user?->isBlocked() === false
+                ? MobileSession::query()->where('refresh_token_hash', $hash)->where('user_id', $user->id)->lockForUpdate()->first()
+                : null;
             if ($session === null) {
                 throw new MobileApiException('UNAUTHORIZED', 401, 'Invalid refresh token.');
             }
@@ -366,7 +379,7 @@ class MobileAuth
             ? MobileSession::query()->with('user')->where('access_token_hash', hash('sha256', $token))->first()
             : null;
 
-        if ($session === null || $session->user === null) {
+        if ($session === null || $session->user === null || $session->user->isBlocked()) {
             throw new MobileApiException('UNAUTHORIZED', 401, 'A valid access token is required.');
         }
 
@@ -381,7 +394,7 @@ class MobileAuth
     {
         $user = User::query()->lockForUpdate()->find($session->user_id);
 
-        if ($user === null || ! MobileSession::query()->whereKey($session->id)
+        if ($user === null || $user->isBlocked() || ! MobileSession::query()->whereKey($session->id)
             ->where('access_token_hash', $session->access_token_hash)
             ->where('access_expires_at', '>', now())->exists()) {
             throw new MobileApiException('UNAUTHORIZED', 401, 'A valid access token is required.');
@@ -392,6 +405,8 @@ class MobileAuth
 
     private function issueSession(User $user): array
     {
+        $user->last_login_at = now();
+        $user->save();
         $session = new MobileSession;
         $session->user_id = $user->id;
 
@@ -413,6 +428,8 @@ class MobileAuth
 
     public function profile(User $user): array
     {
+        $plan = $user->effectivePlan();
+
         return [
             'id' => $user->public_id,
             'phone' => $user->phone,
@@ -422,8 +439,8 @@ class MobileAuth
             'birthDate' => $user->birth_date?->format('Y-m-d'),
             'avatarUrl' => $user->avatar_id === null ? null : AvatarImages::url($user->public_id, $user->avatar_id),
             'language' => $user->language,
-            'plan' => 'free',
-            'planUntil' => null,
+            'plan' => $plan,
+            'planUntil' => $plan === 'pro' ? $user->plan_until?->utc()->format('Y-m-d\TH:i:s\Z') : null,
             'createdAt' => $user->created_at->utc()->format('Y-m-d\TH:i:s\Z'),
         ];
     }
